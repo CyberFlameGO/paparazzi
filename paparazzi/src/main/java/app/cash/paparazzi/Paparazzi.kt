@@ -15,6 +15,7 @@
  */
 package app.cash.paparazzi
 
+import android.animation.AnimationHandler
 import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
@@ -237,7 +238,9 @@ class Paparazzi(
 
     val frameHandler = snapshotHandler.newFrameHandler(snapshot, frameCount, fps)
     frameHandler.use {
+      println("start snapshot, AnimationHandler: ${AnimationHandler.sAnimatorHandler.get()}")
       val viewGroup = bridgeRenderSession.rootViews[0].viewObject as ViewGroup
+      System_Delegate.setBootTimeNanos(0L)
       try {
         withTime(0L) {
           // Initialize the choreographer at time=0.
@@ -245,6 +248,8 @@ class Paparazzi(
 
         viewGroup.addView(view)
         for (frame in 0 until frameCount) {
+          println("Frame ${frame+1} of $frameCount")
+
           val nowNanos = (startNanos + (frame * 1_000_000_000.0 / fps)).toLong()
           withTime(nowNanos) {
             val result = renderSession.render(true)
@@ -261,6 +266,8 @@ class Paparazzi(
         }
       } finally {
         viewGroup.removeView(view)
+//        AnimationHandler.sAnimatorHandler.set(null)
+        println("finish snapshot, AnimationHandler: ${AnimationHandler.sAnimatorHandler.get()}")
       }
     }
   }
@@ -272,30 +279,36 @@ class Paparazzi(
     val frameNanos = TIME_OFFSET_NANOS + timeNanos
 
     // Execute the block at the requested time.
-    System_Delegate.setBootTimeNanos(frameNanos)
+//    System_Delegate.setBootTimeNanos(frameNanos)
     System_Delegate.setNanosTime(frameNanos)
 
+    val choreographer = Choreographer.getInstance()
+    val areCallbacksRunningField = choreographer::class.java.getDeclaredField("mCallbacksRunning")
+    areCallbacksRunningField.isAccessible = true
+
     try {
-      val choreographer = Choreographer.getInstance()
-      val areCallbacksRunningField = choreographer::class.java.getDeclaredField("mCallbacksRunning")
-      areCallbacksRunningField.isAccessible = true
       areCallbacksRunningField.setBoolean(choreographer, true)
 
       // https://android.googlesource.com/platform/frameworks/layoutlib/+/d58aa4703369e109b24419548f38b422d5a44738/bridge/src/com/android/layoutlib/bridge/BridgeRenderSession.java#171
       // BridgeRenderSession.executeCallbacks aggressively tears down the main Looper and BridgeContext, so we call the static delegates ourselves.
-      Handler_Delegate.executeCallbacks()
       val currentTimeMs = SystemClock_Delegate.uptimeMillis()
       val choreographerCallbacks =
         RenderAction.getCurrentContext().sessionInteractiveData.choreographerCallbacks
+      val mCallbacks = choreographerCallbacks::class.java.getDeclaredField("mCallbacks")
+      mCallbacks.isAccessible = true
+
+      println("  before, callbacks queue: ${mCallbacks.get(choreographerCallbacks)}")
       choreographerCallbacks.execute(currentTimeMs, Bridge.getLog())
+      println("  after, callbacks queue: ${mCallbacks.get(choreographerCallbacks)}")
 
       block()
     } catch (e: Throwable) {
       Bridge.getLog().error("broken", "Failed executing Choreographer#doFrame", e, null, null)
       throw e
     } finally {
-      System_Delegate.setNanosTime(0L)
-      System_Delegate.setBootTimeNanos(0L)
+      areCallbacksRunningField.setBoolean(choreographer, false)
+//      System_Delegate.setNanosTime(0L)
+//      System_Delegate.setBootTimeNanos(0L)
     }
   }
 
@@ -388,7 +401,7 @@ class Paparazzi(
 
       appCompatDelegateClass = Class.forName("androidx.appcompat.app.AppCompatDelegate")
     } catch (e: ClassNotFoundException) {
-      logger.info("AppCompat not found on classpath, exiting...")
+      logger.verbose("AppCompat not found on classpath")
       return
     }
 
@@ -464,7 +477,7 @@ class Paparazzi(
           resourcesCompatClass, "getFont", ResourcesInterceptor::class.java
       )
     } catch (e: ClassNotFoundException) {
-      logger.info("ResourceCompat not found on classpath...")
+      logger.verbose("ResourceCompat not found on classpath")
     }
   }
 

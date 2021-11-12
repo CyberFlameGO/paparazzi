@@ -15,15 +15,19 @@
  */
 package app.cash.paparazzi
 
+import android.animation.AnimationHandler
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.view.Choreographer
 import android.view.Choreographer.CALLBACK_ANIMATION
 import android.view.View
 import android.view.animation.LinearInterpolator
+import android.widget.Button
+import android.widget.FrameLayout
 import com.android.internal.lang.System_Delegate
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Ignore
@@ -49,6 +53,12 @@ class PaparazziTest {
 
     assertThat(log).containsExactly("onDraw time=0")
   }
+
+//  @Test
+//  fun foo() {
+//    val view = buildView(paparazzi.context)
+//    paparazzi.snapshot(view)
+//  }
 
   @Test
   fun animationEvents() {
@@ -81,7 +91,28 @@ class PaparazziTest {
     animator.startDelay = 2_000L
     animator.duration = 1_000L
     animator.interpolator = LinearInterpolator()
+
+    with(AnimationHandler.sAnimatorHandler.get()) {
+      if (this != null) {
+        val mAnimationCallbacks = this::class.java.getDeclaredField("mAnimationCallbacks")
+        mAnimationCallbacks.isAccessible = true
+        println("animationHandler.mAnimationCallbacks.size (before): ${(mAnimationCallbacks.get(this) as List<*>).size}")
+      } else {
+        println("animationHandler is null")
+      }
+    }
+
     animator.start()
+
+    with(AnimationHandler.sAnimatorHandler.get()) {
+      if (this != null) {
+        val mAnimationCallbacks = this::class.java.getDeclaredField("mAnimationCallbacks")
+        mAnimationCallbacks.isAccessible = true
+        println("animationHandler.mAnimationCallbacks.size (after): ${(mAnimationCallbacks.get(this) as List<*>).size}")
+      } else {
+        println("animationHandler is null")
+      }
+    }
 
     paparazzi.gif(view, start = 1_000L, end = 4_000L, fps = 4)
 
@@ -141,6 +172,13 @@ class PaparazziTest {
 
     assertThat(thrown).isTrue
   }
+
+  private fun buildView(context: Context) =
+    FrameLayout(context).apply {
+      addView(Button(context).apply {
+        text = "Button Sample"
+      })
+    }
 
   private val time: Long
     get() {
