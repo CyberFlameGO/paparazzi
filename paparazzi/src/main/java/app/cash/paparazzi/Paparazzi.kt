@@ -69,7 +69,7 @@ class Paparazzi(
   private val appCompatEnabled: Boolean = true,
   private val maxPercentDifference: Double = 0.1,
   private val snapshotHandler: SnapshotHandler = determineHandler(maxPercentDifference),
-  private val renderExtensions: Set<RenderExtension> = setOf()
+  private val renderExtensions: Set<RenderExtension> = setOf(),
 ) : TestRule {
   private val THUMBNAIL_SIZE = 1000
 
@@ -247,14 +247,22 @@ class Paparazzi(
         for (frame in 0 until frameCount) {
           val nowNanos = (startNanos + (frame * 1_000_000_000.0 / fps)).toLong()
           withTime(nowNanos) {
-            val result = renderSession.render(true)
-            if (result.status == ERROR_UNKNOWN) {
-              throw result.exception
+            if (renderExtensions.isNotEmpty()) {
+              renderExtensions.forEach { extension ->
+                extension.preRender(view) {
+                  viewGroup.addView(it)
+                  renderImage()
+                  viewGroup.removeView(it)
+                  return@preRender bridgeRenderSession.image.deepCopy()
+                }
+              }
             }
+
+            renderImage()
 
             var image = bridgeRenderSession.image
             renderExtensions.forEach {
-              image = it.render(snapshot, view, image)
+              image = it.postRender(view, image)
             }
             frameHandler.handle(scaleImage(image))
           }
@@ -263,6 +271,17 @@ class Paparazzi(
         viewGroup.removeView(view)
       }
     }
+  }
+
+  private fun renderImage() {
+    val result = renderSession.render(true)
+    if (result.status == ERROR_UNKNOWN) {
+      throw result.exception
+    }
+  }
+
+  private fun BufferedImage.deepCopy(): BufferedImage {
+    return BufferedImage(colorModel, copyData(null), colorModel.isAlphaPremultiplied, null)
   }
 
   private fun withTime(

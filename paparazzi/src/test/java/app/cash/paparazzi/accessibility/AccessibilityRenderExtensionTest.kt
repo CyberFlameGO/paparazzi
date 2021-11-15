@@ -21,7 +21,7 @@ class AccessibilityRenderExtensionTest {
   @get:Rule
   val paparazzi = Paparazzi(
     snapshotHandler = TestSnapshotVerifier(),
-    renderExtensions = setOf(AccessibilityRenderExtension())
+    renderExtensions = setOf(AccessibilityRenderExtension()),
   )
 
   @Test
@@ -77,7 +77,7 @@ class AccessibilityRenderExtensionTest {
             relativePath = expected.path,
             image = image,
             goldenImage = ImageIO.read(expected),
-            maxPercentDifferent = 0.2,
+            maxPercentDifferent = 0.1, // Default percent defined in paparazzi.
           )
         }
 

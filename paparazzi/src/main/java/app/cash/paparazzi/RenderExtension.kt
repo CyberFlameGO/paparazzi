@@ -22,5 +22,10 @@ import java.awt.image.BufferedImage
  * An extension for overlaying additional information on top of each rendered frame.
  */
 interface RenderExtension {
-  fun render(snapshot: Snapshot, view: View, image: BufferedImage): BufferedImage
+  // Allows the extension to render its own view hierarchy via `render` function for the given `contentView`.
+  // This is called before the `contentView` is rendered by Paparazzi
+  fun preRender(contentView: View, render: (View) -> BufferedImage)
+
+  // Allows the extension to render on top of the bufferedImage output after rendering the `contentView`
+  fun postRender(contentView: View, bufferedImage: BufferedImage): BufferedImage = bufferedImage
 }
